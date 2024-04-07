@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
@@ -19,7 +20,7 @@ func connectToDB() (*mongo.Database, error) {
 
 	uri := os.Getenv("MONGO_URI")
 	if uri == "" {
-		log.Fatal("MONGO_URI is not set")
+		return nil, errors.New("MONGO_URI is not set")
 	}
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
