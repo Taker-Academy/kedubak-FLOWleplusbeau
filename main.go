@@ -1,41 +1,70 @@
 package main
 
 import (
-	"net/http"
+	"context"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"log"
 	"os"
-
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"time"
 )
 
-func main() {
+func connectToDB() (*mongo.Database, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	e := echo.New()
-
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
-
-	e.GET("/", func(c echo.Context) error {
-		return c.HTML(http.StatusOK, "Hello, Docker! <3")
-	})
-
-	e.GET("/health", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, struct{ Status string }{Status: "OK"})
-	})
-
-	httpPort := os.Getenv("PORT")
-	if httpPort == "" {
-		httpPort = "8080"
+	uri := os.Getenv("MONGO_URI")
+	if uri == "" {
+		log.Fatal("MONGO_URI is not set")
 	}
 
-	e.Logger.Fatal(e.Start(":" + httpPort))
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		return nil, err
+	}
+
+	db := client.Database("keduback")
+
+	return db, err
 }
 
-// Simple implementation of an integer minimum
-// Adapted from: https://gobyexample.com/testing-and-benchmarking
-func IntMin(a, b int) int {
-	if a < b {
-		return a
+func main() {
+	err := run()
+	if err != nil {
+		panic(err)
 	}
-	return b
+}
+
+func run() error {
+	// load env variables
+	err := godotenv.Load()
+	if err != nil {
+		return err
+	}
+
+	//init database
+	database, err := connectToDB()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	//defer disconnect
+	defer database.Client().Disconnect(context.Background())
+
+	app := fiber.New()
+
+	app.Use(logger.New())
+	app.Use(recover.New())
+
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("Hello, World!")
+	})
+
+	app.Listen(":8080")
+
+	return nil
 }
