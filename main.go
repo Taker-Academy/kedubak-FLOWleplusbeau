@@ -205,6 +205,36 @@ func run() error {
 		})
 	})
 
+	app.Get("/user/me", jwt.NewAuthMiddleware(jwt.GetSecretKey()), func(c *fiber.Ctx) error {
+		userID, err := jwt.GetUserID(c.Get("Authorization"), db.Client())
+		if err != nil {
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+				"ok":    false,
+				"error": "Unauthorized",
+			})
+		}
+
+		userCollection := db.Collection("User")
+		objId, _ := primitive.ObjectIDFromHex(userID)
+		user := models.User{}
+		err = userCollection.FindOne(context.Background(), bson.M{"_id": objId}).Decode(&user)
+		if err != nil {
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+				"ok":    false,
+				"error": "Unauthorized",
+			})
+		}
+
+		return c.Status(http.StatusOK).JSON(fiber.Map{
+			"ok": true,
+			"data": fiber.Map{
+				"email":     user.Email,
+				"firstName": user.FirstName,
+				"lastName":  user.LastName,
+			},
+		})
+	})
+
 	app.Listen(":8080")
 
 	return nil
