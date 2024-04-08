@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/joho/godotenv"
@@ -76,9 +77,62 @@ func run() error {
 
 	app.Use(logger.New())
 	app.Use(recover.New())
+	app.Use(cors.New())
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Hello, World!")
+	})
+
+	app.Post("/auth/login", func(c *fiber.Ctx) error {
+		var loginRequest models.User
+		if err := c.BodyParser(&loginRequest); err != nil || loginRequest.Email == "" || loginRequest.Password == "" {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+				"ok":    false,
+				"error": "Bad Request",
+			})
+		}
+
+		userCollection := db.Collection("User")
+
+		// get user from db
+		existingUser := models.User{}
+		err := userCollection.FindOne(context.Background(), bson.M{"email": loginRequest.Email}).Decode(&existingUser)
+		if err != nil {
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+				"ok":    false,
+				"error": "wrong credentials",
+			})
+		}
+
+		// Check if the password is correct
+		if !CheckPasswordHash(loginRequest.Password, existingUser.Password) {
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+				"ok":    false,
+				"error": "wrong password",
+			})
+		}
+
+		// Generate JWT token
+		userID := existingUser.ID.Hex()
+		token := jwt.GetToken(userID)
+		if token == "" {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"ok":    false,
+				"error": "Internal Server Error",
+			})
+		}
+
+		return c.Status(http.StatusOK).JSON(fiber.Map{
+			"ok": true,
+			"data": fiber.Map{
+				"token": token,
+				"user": fiber.Map{
+					"email":     existingUser.Email,
+					"firstName": existingUser.FirstName,
+					"lastName":  existingUser.LastName,
+				},
+			},
+		})
 	})
 
 	app.Post("/auth/register", func(c *fiber.Ctx) error {
