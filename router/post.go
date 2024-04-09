@@ -18,6 +18,7 @@ func PostRoutes(app *fiber.App, db *mongo.Database) {
 	})
 	GetPosts(db, post)
 	GetMyPosts(db, post)
+	GetPostById(db, post)
 	CreatePost(db, post)
 }
 
@@ -167,6 +168,55 @@ func GetMyPosts(db *mongo.Database, post fiber.Router) {
 		return c.Status(http.StatusOK).JSON(fiber.Map{
 			"ok":   true,
 			"data": posts,
+		})
+	})
+}
+
+func GetPostById(db *mongo.Database, post fiber.Router) {
+	post.Get("/:id", func(c *fiber.Ctx) error {
+		// get user id and authorization from token
+		_, err := jwt.GetUserID(c.Get("Authorization"), db.Client())
+		if err != nil {
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+				"ok":    false,
+				"error": "wrong token",
+			})
+		}
+
+		// get post by id
+		postCollection := db.Collection("Post")
+		postId := c.Params("id")
+		objId, _ := primitive.ObjectIDFromHex(postId)
+		post := models.Post{}
+
+		// get post from db
+		err = postCollection.FindOne(context.Background(), bson.M{"_id": objId}).Decode(&post)
+		if err != nil {
+			return c.Status(http.StatusNotFound).JSON(fiber.Map{
+				"ok":    false,
+				"error": "Post not found",
+			})
+		}
+
+		// change nil array to empty array
+		if post.UpVotes == nil {
+			post.UpVotes = []string{}
+		}
+		if post.Comments == nil {
+			post.Comments = []models.Comment{}
+		}
+
+		return c.Status(http.StatusOK).JSON(fiber.Map{
+			"ok": true,
+			"data": fiber.Map{
+				"createdAt": post.CreatedAt,
+				"userId":    post.UserId,
+				"firstName": post.FirstName,
+				"title":     post.Title,
+				"content":   post.Content,
+				"comments":  post.Comments,
+				"upVotes":   post.UpVotes,
+			},
 		})
 	})
 }

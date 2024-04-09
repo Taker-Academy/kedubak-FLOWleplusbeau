@@ -124,7 +124,7 @@ func EditUser(db *mongo.Database, user fiber.Router) {
 }
 
 func DeleteUser(db *mongo.Database, user fiber.Router) {
-	user.Delete("/delete", func(c *fiber.Ctx) error {
+	user.Delete("/remove", func(c *fiber.Ctx) error {
 		userID, err := jwt.GetUserID(c.Get("Authorization"), db.Client())
 		if err != nil {
 			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
