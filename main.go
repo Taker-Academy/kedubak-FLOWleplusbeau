@@ -1,8 +1,6 @@
 package main
 
 import (
-	"containerized-go-app/jwt"
-	"containerized-go-app/models"
 	"containerized-go-app/router"
 	"context"
 	"errors"
@@ -11,12 +9,9 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/joho/godotenv"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
-	"net/http"
 	"os"
 	"time"
 )
@@ -74,36 +69,7 @@ func run() error {
 	})
 
 	router.AuthRoutes(app, db)
-
-	app.Get("/user/me", jwt.NewAuthMiddleware(jwt.GetSecretKey()), func(c *fiber.Ctx) error {
-		userID, err := jwt.GetUserID(c.Get("Authorization"), db.Client())
-		if err != nil {
-			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
-				"ok":    false,
-				"error": "Unauthorized",
-			})
-		}
-
-		userCollection := db.Collection("User")
-		objId, _ := primitive.ObjectIDFromHex(userID)
-		user := models.User{}
-		err = userCollection.FindOne(context.Background(), bson.M{"_id": objId}).Decode(&user)
-		if err != nil {
-			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
-				"ok":    false,
-				"error": "Unauthorized",
-			})
-		}
-
-		return c.Status(http.StatusOK).JSON(fiber.Map{
-			"ok": true,
-			"data": fiber.Map{
-				"email":     user.Email,
-				"firstName": user.FirstName,
-				"lastName":  user.LastName,
-			},
-		})
-	})
+	router.UserRoutes(app, db)
 
 	app.Listen(":8080")
 

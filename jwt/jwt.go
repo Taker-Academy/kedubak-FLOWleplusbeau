@@ -29,7 +29,9 @@ func GetClaims(tokenString string) (*jtoken.Token, error) {
 }
 
 func GetUserID(tokenString string, client *mongo.Client) (string, error) {
-	tokenString = tokenString[7:] // Remove the Bearer prefix
+	// Remove the Bearer prefix
+	tokenString = tokenString[7:]
+
 	token, err := GetClaims(tokenString)
 	if err != nil {
 		return "", err
