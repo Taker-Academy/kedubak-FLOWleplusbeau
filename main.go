@@ -70,6 +70,7 @@ func run() error {
 
 	router.AuthRoutes(app, db)
 	router.UserRoutes(app, db)
+	router.PostRoutes(app, db)
 
 	app.Listen(":8080")
 
