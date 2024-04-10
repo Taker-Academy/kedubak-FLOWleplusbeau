@@ -21,6 +21,7 @@ func PostRoutes(app *fiber.App, db *mongo.Database) {
 	GetPostById(db, post)
 	CreatePost(db, post)
 	DeletePostById(db, post)
+	VotePostById(db, post)
 }
 
 func CreatePost(db *mongo.Database, post fiber.Router) {
@@ -71,6 +72,22 @@ func CreatePost(db *mongo.Database, post fiber.Router) {
 			})
 		}
 
+		_, err = userCollection.UpdateOne(context.Background(), bson.M{"_id": objId}, bson.M{"$set": bson.M{"comments": []models.Comment{}}})
+		if err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"ok":    false,
+				"error": "Internal Server Error",
+			})
+		}
+
+		_, err = userCollection.UpdateOne(context.Background(), bson.M{"_id": objId}, bson.M{"$set": bson.M{"upVotes": []string{}}})
+		if err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"ok":    false,
+				"error": "Internal Server Error",
+			})
+		}
+
 		return c.Status(http.StatusCreated).JSON(fiber.Map{
 			"ok": true,
 			"data": fiber.Map{
@@ -96,8 +113,8 @@ func GetPosts(db *mongo.Database, post fiber.Router) {
 			})
 		}
 
+		// get all posts
 		postCollection := db.Collection("Post")
-		//get all posts
 		cursor, err := postCollection.Find(context.Background(), bson.M{})
 		if err != nil {
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
@@ -105,6 +122,7 @@ func GetPosts(db *mongo.Database, post fiber.Router) {
 				"error": "Internal Server Error",
 			})
 		}
+
 		posts := []models.Post{}
 		if err = cursor.All(context.Background(), &posts); err != nil {
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
@@ -277,6 +295,95 @@ func DeletePostById(db *mongo.Database, post fiber.Router) {
 				"upVotes":   post.UpVotes,
 				"removed":   true,
 			},
+		})
+	})
+}
+
+func VotePostById(db *mongo.Database, post fiber.Router) {
+	post.Post("/vote/:id", func(c *fiber.Ctx) error {
+		// get user id and authorization from token
+		UserId, err := jwt.GetUserID(c.Get("Authorization"), db.Client())
+		if err != nil {
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{
+				"ok":    false,
+				"error": "wrong token",
+			})
+		}
+
+		// get post by id
+		postCollection := db.Collection("Post")
+		postId := c.Params("id")
+		objId, _ := primitive.ObjectIDFromHex(postId)
+		post := models.Post{}
+
+		// check if id is valid
+		if objId.IsZero() {
+			return c.Status(http.StatusUnprocessableEntity).JSON(fiber.Map{
+				"ok":    false,
+				"error": "Invalid ID",
+			})
+		}
+
+		// get post from db
+		err = postCollection.FindOne(context.Background(), bson.M{"_id": objId}).Decode(&post)
+		if err != nil {
+			return c.Status(http.StatusNotFound).JSON(fiber.Map{
+				"ok":    false,
+				"error": "Post not found",
+			})
+		}
+
+		//get user from db
+		userCollection := db.Collection("User")
+		objId, _ = primitive.ObjectIDFromHex(UserId)
+		user := models.User{}
+		err = userCollection.FindOne(context.Background(), bson.M{"_id": objId}).Decode(&user)
+		if err != nil {
+			return c.Status(http.StatusNotFound).JSON(fiber.Map{
+				"ok":    false,
+				"error": "User not found",
+			})
+		}
+
+		// check if the user has already voted
+		for _, upVote := range post.UpVotes {
+			if upVote == UserId {
+				return c.Status(http.StatusConflict).JSON(fiber.Map{
+					"ok":    false,
+					"error": "User has already voted",
+				})
+			}
+		}
+
+		//check if the user has voted in the last 1 minutes
+		if time.Now().Sub(user.LastUpVote) < time.Minute {
+			return c.Status(http.StatusForbidden).JSON(fiber.Map{
+				"ok":    false,
+				"error": "User has voted in the last 1 minute",
+			})
+		}
+
+		// add user to upVotes
+		_, err = postCollection.UpdateOne(context.Background(), bson.M{"_id": objId}, bson.M{"$push": bson.M{"upVotes": UserId}})
+		if err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"ok":    false,
+				"error": "Internal Server Error",
+			})
+		}
+
+		// reset user vote time
+		_, err = userCollection.UpdateOne(context.Background(), bson.M{"_id": objId}, bson.M{"$set": bson.M{"lastUpVote": time.Now()}})
+		if err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"ok":    false,
+				"error": "Internal Server Error",
+			})
+		}
+
+		return c.Status(http.StatusOK).JSON(fiber.Map{
+			"ok":      true,
+			"message": "post upvoted",
 		})
 	})
 }

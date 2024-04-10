@@ -25,12 +25,17 @@ func connectToDB() (*mongo.Database, error) {
 		return nil, errors.New("MONGO_URI is not set")
 	}
 
+	dbName := os.Getenv("DB_NAME")
+	if dbName == "" {
+		return nil, errors.New("DB_NAME is not set")
+	}
+
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
 		return nil, err
 	}
 
-	db := client.Database("keduback")
+	db := client.Database(dbName)
 
 	return db, err
 }
