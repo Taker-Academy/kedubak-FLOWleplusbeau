@@ -1,4 +1,4 @@
-create a .env file with the following content in the root of the project
+create a .env file in the root of the project
 
 see the .env.exemple file for reference
 ```

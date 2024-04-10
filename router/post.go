@@ -363,13 +363,23 @@ func VotePostById(db *mongo.Database, post fiber.Router) {
 			})
 		}
 
-		// add user to upVotes
-		_, err = postCollection.UpdateOne(context.Background(), bson.M{"_id": objId}, bson.M{"$push": bson.M{"upVotes": UserId}})
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"ok":    false,
-				"error": "Internal Server Error",
-			})
+		// create upVotes field in post in db
+		if post.UpVotes == nil {
+			_, err = postCollection.UpdateOne(context.Background(), bson.M{"_id": objId}, bson.M{"$set": bson.M{"upVotes": []string{"id"}}})
+			if err != nil {
+				return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+					"ok":    false,
+					"error": "Internal Server Error",
+				})
+			}
+		} else {
+			_, err = postCollection.UpdateOne(context.Background(), bson.M{"_id": objId}, bson.M{"$push": bson.M{"upVotes": UserId}})
+			if err != nil {
+				return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+					"ok":    false,
+					"error": "Internal Server Error",
+				})
+			}
 		}
 
 		// reset user vote time
